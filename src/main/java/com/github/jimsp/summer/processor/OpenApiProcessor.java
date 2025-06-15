@@ -23,6 +23,7 @@ import java.io.Writer;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Predicate;
 import java.util.regex.*;
 import java.util.stream.Collectors;
@@ -32,179 +33,223 @@ import java.util.stream.Collectors;
 @AutoService(Processor.class)
 public class OpenApiProcessor extends AbstractProcessor {
 
-    private Filer filer;
+    private Filer    filer;
     private Messager log;
     private Elements elems;
 
-    @Override public synchronized void init(ProcessingEnvironment env) {
+    /* -------- init -------- */
+    @Override 
+    public synchronized void init(ProcessingEnvironment env){
         filer = env.getFiler();
         log   = env.getMessager();
         elems = env.getElementUtils();
     }
 
-    @Override public boolean process(Set<? extends TypeElement> ann, RoundEnvironment round) {
-        for (Element e : round.getElementsAnnotatedWith(Summer.class)) {
+    /* -------- process loop -------- */
+    @Override 
+    public boolean process(Set<? extends TypeElement> ann, RoundEnvironment rnd){
+        for(Element e : rnd.getElementsAnnotatedWith(Summer.class)){
             ContractRaw cfg = new ContractRaw(e.getAnnotation(Summer.class));
-            try {
-                generateSources(cfg.spec()).forEach(this::emit);
+            try{
+                generateSources(cfg).forEach(this::emit);
                 patchServiceImpl(e, cfg);
-            } catch (Exception ex) {
-                log.printMessage(Diagnostic.Kind.ERROR, "Processor error: " + ex, e);
+            }catch(IOException | UncheckedIOException io){
+                log.printMessage(Diagnostic.Kind.ERROR,"I/O: "+io.getMessage(),e);
+                throw new RuntimeException(io);      // fail-fast
             }
         }
         return true;
     }
 
-    /* OpenAPI -> fontes */
-    private Map<String,String> generateSources(String spec) throws Exception {
-        try(FileSystem fs = Jimfs.newFileSystem(Configuration.unix())) {
+    /* -------- OpenAPI → .java -------- */
+    private Map<String,String> generateSources(ContractRaw c) throws IOException{
+        try(FileSystem fs = Jimfs.newFileSystem(Configuration.unix())){
             Path out = fs.getPath("/gen");
-            new DefaultGenerator().opts(openApiCfg(spec,out).toClientOptInput()).generate();
+            new DefaultGenerator().opts(openCfg(c,out).toClientOptInput()).generate();
+
             Map<String,String> map=new HashMap<>();
             Files.walk(out).filter(p->p.toString().endsWith(".java")).forEach(p->{
                 try{
-                    String fq=p.toString().replace(out+"/src/main/java/","")
-                                          .replace('/','.')
-                                          .replace(".java","");
+                    String fq = p.toString()
+                                  .replace(out+"/src/main/java/","")
+                                  .replace('/','.')
+                                  .replace(".java","");
                     map.put(fq, Files.readString(p));
                 }catch(IOException x){throw new UncheckedIOException(x);}
             });
             return map;
         }
     }
-    private CodegenConfigurator openApiCfg(String spec, Path out){
+    private CodegenConfigurator openCfg(ContractRaw c, Path out){
         return new CodegenConfigurator()
-                .setGeneratorName("jaxrs-spec")
-                .setInputSpec(Paths.get(spec).toUri().toString())
-                .setOutputDir(out.toString())
-                .setModelPackage("com.github.jimsp.summer.dto")
-                .setApiPackage("com.github.jimsp.summer.api")
-                .setInvokerPackage("com.github.jimsp.summer.invoker")
-                .setAdditionalProperties(Map.of(
-                        "interfaceOnly",true,
-                        "useBeanValidation",true,
-                        "useLombokAnnotations",true,
-                        "modelMutable",false,
-                        "serializationLibrary","jackson"));
+            .setGeneratorName("jaxrs-spec")
+            .setInputSpec(Paths.get(c.spec).toUri().toString())
+            .setOutputDir(out.toString())
+            .setModelPackage(c.dtoPkg)
+            .setApiPackage(c.apiPkg)
+            .setInvokerPackage(c.basePkg+".invoker")
+            .setAdditionalProperties(Map.of(
+                    "interfaceOnly",true,
+                    "useBeanValidation",true,
+                    "useLombokAnnotations",true,
+                    "modelMutable",false,
+                    "serializationLibrary","jackson"));
     }
-    private void emit(String fq,String code){
-        try(Writer w=filer.createSourceFile(fq).openWriter()){ w.write(code); }
-        catch(IOException x){ log.printMessage(Diagnostic.Kind.ERROR,"emit "+fq+": "+x); }
+    private void emit(String fq,String code) throws IOException{
+        try(Writer w = filer.createSourceFile(fq).openWriter()){ w.write(code); }
     }
 
-    private void patchServiceImpl(Element marker, ContractRaw c) throws IOException {
-        String base   = marker.getSimpleName().toString().replace("Api","").toLowerCase();
-        String dtoNm  = toUpperCamel(base);
-        ClassName dto = ClassName.get("com.github.jimsp.summer.dto", dtoNm);
-        String ifaceFq= "com.github.jimsp.summer.api."+dtoNm+"ApiService";
+    /* -------- patch ServiceImpl -------- */
+    private void patchServiceImpl(Element marker, ContractRaw c) throws IOException{
+        String baseName = marker.getSimpleName().toString().replace("Api","");
+        ClassName dto   = ClassName.get(c.dtoPkg, baseName);
+        String ifaceFq  = c.apiPkg+"."+baseName+"ApiService";
 
         TypeElement api = elems.getTypeElement(ifaceFq);
-        if(api==null){ log.printMessage(Diagnostic.Kind.ERROR,"Interface "+ifaceFq+" not found",marker); return; }
+        if(api==null) throw new IOException("Interface "+ifaceFq+" not generated");
+
         ExecutableElement m = api.getEnclosedElements().stream()
-                .filter(e->e.getKind()==ElementKind.METHOD)
-                .map(ExecutableElement.class::cast).findFirst().orElse(null);
-        if(m==null){ log.printMessage(Diagnostic.Kind.ERROR,"No methods in "+ifaceFq,marker); return;}
+                                 .filter(e->e.getKind()==ElementKind.METHOD)
+                                 .map(ExecutableElement.class::cast)
+                                 .findFirst()
+                                 .orElseThrow(() -> new IOException("No methods in "+ifaceFq));
+
+        /* defensive check: require at least one parameter */
+        if(m.getParameters().isEmpty())
+            throw new IOException("Method "+m.getSimpleName()+" in "+ifaceFq+
+                                  " has no parameters – cannot map to Channel/Handler.");
+
+        String param = m.getParameters().get(0).getSimpleName().toString();
 
         FieldSpec field; MethodSpec method;
 
-        if(c.mode()==Mode.SYNC){
-            ClassName handler = ClassName.get("com.github.jimsp.summer.handlers", dtoNm+"Handler");
-            field   = FieldSpec.builder(handler,"handler",Modifier.PRIVATE).addAnnotation(Inject.class).build();
-            method  = MethodSpec.overriding(m)
-                      .addStatement("return $T.ok(handler.handle(body)).build()", ClassName.get("jakarta.ws.rs.core","Response"))
-                      .build();
-        }else{
-            String chan="channel."+c.cluster()+"."+base+"."+m.getSimpleName();
-            generateWrapperPlaceholder(dto, chan, marker);
+        /* ---------- SYNC ---------- */
+        if(c.mode == Mode.SYNC){
+            ClassName handler = ClassName.get(c.handlerPkg, baseName+"Handler");
+            field = FieldSpec.builder(handler,"handler",Modifier.PRIVATE)
+                             .addAnnotation(Inject.class).build();
+            method= MethodSpec.methodBuilder(m.getSimpleName().toString())
+                   .addAnnotation(Override.class).addModifiers(Modifier.PUBLIC)
+                   .returns(ClassName.get("jakarta.ws.rs.core","Response"))
+                   .addParameter(dto,param)
+                   .addStatement("return $T.ok(handler.handle($N)).build()",
+                                 ClassName.get("jakarta.ws.rs.core","Response"), param)
+                   .build();
+        }
+        /* ---------- ASYNC request/reply ---------- */
+        else{
+            String sendChan  = "channel."+c.cluster+"."+baseName.toLowerCase()+"."+m.getSimpleName();
+            String replyChan = c.replyChan.isBlank()
+                               ? "channel."+c.cluster+"."+baseName.toLowerCase()+".reply"
+                               : c.replyChan;
 
-            ParameterizedTypeName chanType=ParameterizedTypeName.get(
-                ClassName.get("com.github.jimsp.summer.messaging","Channel"), dto, ClassName.get(Void.class));
+            TypeName outType = ClassName.get("java.lang","Object");           // generic placeholder
+            generatePlaceholderChannel(dto,outType,sendChan,replyChan,c.channelPkg,marker);
+
+            ParameterizedTypeName chanType = ParameterizedTypeName.get(
+                    ClassName.get("com.github.jimsp.summer.messaging","Channel"), dto, outType);
 
             field = FieldSpec.builder(chanType,"channel",Modifier.PRIVATE)
                     .addAnnotation(Inject.class)
                     .addAnnotation(AnnotationSpec.builder(com.github.jimsp.summer.annotations.Channel.class)
-                                  .addMember("value","$S",chan).build())
+                               .addMember("value","$S", sendChan).build())
                     .build();
-            method= MethodSpec.overriding(m)
-                    .addStatement("channel.send(body)")
-                    .addStatement("return $T.accepted().build()", ClassName.get("jakarta.ws.rs.core","Response"))
-                    .build();
+            method= MethodSpec.methodBuilder(m.getSimpleName().toString())
+                   .addAnnotation(Override.class).addModifiers(Modifier.PUBLIC)
+                   .returns(ClassName.get("jakarta.ws.rs.core","Response"))
+                   .addParameter(dto,param)
+                   .addStatement("$T reply = channel.request($N)", outType, param)
+                   .addStatement("return $T.ok(reply).build()",
+                                 ClassName.get("jakarta.ws.rs.core","Response"))
+                   .build();
         }
 
-        TypeSpec impl = TypeSpec.classBuilder(dtoNm+"ApiServiceImpl")
+        TypeSpec impl = TypeSpec.classBuilder(baseName+"ApiServiceImpl")
                 .addModifiers(Modifier.PUBLIC)
                 .addAnnotation(ClassName.get("jakarta.enterprise.context","ApplicationScoped"))
                 .addSuperinterface(ClassName.bestGuess(ifaceFq))
-                .addField(field)
-                .addMethod(method)
-                .build();
-        JavaFile.builder("com.github.jimsp.summer.service",impl).build().writeTo(filer);
+                .addField(field).addMethod(method).build();
+        JavaFile.builder(c.servicePkg,impl).build().writeTo(filer);
     }
 
+    /* -------- placeholder Channel -------- */
+    private void generatePlaceholderChannel(ClassName in,TypeName out,
+                                            String sendChan,String replyChan,
+                                            String pkg,Element loc) throws IOException{
+        String cls = toUpperCamel(sendChan.replaceAll("[^a-zA-Z0-9]",""))+"ChannelImpl";
+        TypeName qIn  = ParameterizedTypeName.get(ClassName.get(ConcurrentLinkedQueue.class), in);
+        TypeName qOut = ParameterizedTypeName.get(ClassName.get(ConcurrentLinkedQueue.class), out);
+
+        TypeSpec impl = TypeSpec.classBuilder(cls)
+           .addModifiers(Modifier.PUBLIC)
+           .addAnnotation(ClassName.get("jakarta.enterprise.context","ApplicationScoped"))
+           .addAnnotation(AnnotationSpec.builder(com.github.jimsp.summer.annotations.Channel.class)
+                 .addMember("value","$S", sendChan).build())
+           .addSuperinterface(ParameterizedTypeName.get(
+                 ClassName.get("com.github.jimsp.summer.messaging","Channel"), in, out))
+           .addField(qIn,  "pubQ", Modifier.PRIVATE, Modifier.FINAL)
+           .initializer("new $T<>()", ConcurrentLinkedQueue.class)
+           .addField(qOut, "repQ", Modifier.PRIVATE, Modifier.FINAL)
+           .initializer("new $T<>()", ConcurrentLinkedQueue.class)
+
+           .addMethod(MethodSpec.methodBuilder("send").addAnnotation(Override.class)
+                 .addModifiers(Modifier.PUBLIC).addParameter(in,"m")
+                 .addStatement("pubQ.offer(m)").build())
+           .addMethod(MethodSpec.methodBuilder("sendAsync").addAnnotation(Override.class)
+                 .addModifiers(Modifier.PUBLIC)
+                 .returns(ParameterizedTypeName.get(ClassName.get(CompletableFuture.class),ClassName.get(Void.class)))
+                 .addParameter(in,"m").addStatement("pubQ.offer(m)")
+                 .addStatement("return $T.completedFuture(null)",CompletableFuture.class).build())
+           .addMethod(MethodSpec.methodBuilder("request").addAnnotation(Override.class)
+                 .addModifiers(Modifier.PUBLIC).returns(out).addParameter(in,"m")
+                 .addStatement("pubQ.offer(m)").addStatement("return repQ.poll()").build())
+           .addMethod(MethodSpec.methodBuilder("requestAsync").addAnnotation(Override.class)
+                 .addModifiers(Modifier.PUBLIC)
+                 .returns(ParameterizedTypeName.get(ClassName.get(CompletableFuture.class),out))
+                 .addParameter(in,"m").addStatement("pubQ.offer(m)")
+                 .addStatement("return $T.completedFuture(repQ.poll())",CompletableFuture.class).build())
+           .build();
+
+        JavaFile.builder(pkg,impl).build().writeTo(filer);
+    }
+
+    /* -------- helpers -------- */
     private static String toUpperCamel(String s){
         if(s==null||s.isBlank()) return s;
-        return Arrays.stream(s.split("[\-_]"))
+        return Arrays.stream(s.split("[\\-_]"))
                      .filter(Predicate.not(String::isBlank))
                      .map(p->p.substring(0,1).toUpperCase()+p.substring(1).toLowerCase())
                      .collect(Collectors.joining());
     }
-
-    private void generateWrapperPlaceholder(ClassName dto,String chan,Element loc){
-        String pkg="com.github.jimsp.summer.channels.generated";
-        String cls=toUpperCamel(chan.replaceAll("[^a-zA-Z0-9]",""))+"ChannelImpl";
-
-        TypeSpec tp=TypeSpec.classBuilder(cls)
-          .addModifiers(Modifier.PUBLIC)
-          .addAnnotation(ClassName.get("jakarta.enterprise.context","ApplicationScoped"))
-          .addAnnotation(AnnotationSpec.builder(com.github.jimsp.summer.annotations.Channel.class)
-               .addMember("value","$S",chan).build())
-          .addSuperinterface(ParameterizedTypeName.get(
-               ClassName.get("com.github.jimsp.summer.messaging","Channel"), dto, ClassName.get(Void.class)))
-          .addMethod(MethodSpec.methodBuilder("send").addAnnotation(Override.class)
-               .addModifiers(Modifier.PUBLIC).addParameter(dto,"m")
-               .addStatement("System.out.println($S+m)","SEND ").build())
-          .addMethod(MethodSpec.methodBuilder("sendAsync").addAnnotation(Override.class)
-               .addModifiers(Modifier.PUBLIC)
-               .returns(ParameterizedTypeName.get(ClassName.get(CompletableFuture.class),ClassName.get(Void.class)))
-               .addParameter(dto,"m")
-               .addStatement("return $T.completedFuture(null)",CompletableFuture.class).build())
-          .addMethod(MethodSpec.methodBuilder("request").addAnnotation(Override.class)
-               .addModifiers(Modifier.PUBLIC).returns(ClassName.get(Void.class))
-               .addParameter(dto,"m")
-               .addStatement("return null").build())
-          .addMethod(MethodSpec.methodBuilder("requestAsync").addAnnotation(Override.class)
-               .addModifiers(Modifier.PUBLIC)
-               .returns(ParameterizedTypeName.get(ClassName.get(CompletableFuture.class),ClassName.get(Void.class)))
-               .addParameter(dto,"m")
-               .addStatement("return $T.completedFuture(null)",CompletableFuture.class).build())
-          .build();
-        try{ JavaFile.builder(pkg,tp).build().writeTo(filer);}
-        catch(IOException x){ log.printMessage(Diagnostic.Kind.ERROR,"wrapper gen: "+x,loc);}
-    }
-
-    /* resolve ${KEY:default} ------------------------------------------------ */
     private static String resolve(String v){
         if(v==null||!v.contains("${")) return v;
         Matcher m=Pattern.compile("\\$\\{([^:}]+)(?::([^}]*))?}").matcher(v);
         StringBuffer sb=new StringBuffer();
         while(m.find()){
-            String rep=System.getProperty(m.group(1),
+            String rep = System.getProperty(m.group(1),
                          System.getenv().getOrDefault(m.group(1),
-                         m.group(2)==null?"":m.group(2)));
+                         m.group(2)==null ? \"\" : m.group(2)));
             m.appendReplacement(sb, Matcher.quoteReplacement(rep));
         }
-        m.appendTail(sb);
-        return sb.toString();
+        m.appendTail(sb); return sb.toString();
     }
+    private static String choose(String v,String d){ return v.isBlank()? d : v; }
 
-    /* record */
-    private record ContractRaw(String spec,String cluster,Mode mode,int maxRetries,
-                               boolean circuitBreaker,int cbFT,int cbDelay,
-                               String dlq,int batchSize,String batchInt){
+    /* -------- cfg record -------- */
+    private record ContractRaw(
+            String spec,String cluster,Mode mode,
+            String basePkg,String dtoPkg,String apiPkg,
+            String servicePkg,String handlerPkg,String channelPkg,
+            String replyChan){
         ContractRaw(Summer a){
-            this(resolve(a.value()),resolve(a.cluster()),a.mode(),a.maxRetries(),
-                 a.circuitBreaker(),a.cbFailureThreshold(),a.cbDelaySeconds(),
-                 resolve(a.dlq()),a.batchSize(),resolve(a.batchInterval()));
+            this(resolve(a.value()), a.cluster(), a.mode(),
+                 resolve(a.basePackage()),
+                 choose(resolve(a.dtoPackage()),     resolve(a.basePackage()+".dto")),
+                 choose(resolve(a.apiPackage()),     resolve(a.basePackage()+".api")),
+                 choose(resolve(a.servicePackage()), resolve(a.basePackage()+".service")),
+                 choose(resolve(a.handlerPackage()), resolve(a.basePackage()+".handlers")),
+                 choose(resolve(a.channelPackage()), resolve(a.basePackage()+".channels.generated")),
+                 resolve(a.replyChannel()));
         }
     }
 }
