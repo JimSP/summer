@@ -28,9 +28,9 @@ O Summer é um framework inovador que automatiza a criação de APIs JAX-RS e pi
 <dependencies>
     <!-- Summer Framework Core -->
     <dependency>
-        <groupId>com.example</groupId>
+        <groupId>com.github.jimsp.summer</groupId>
         <artifactId>summer-framework</artifactId>
-        <version>1.0.0</version>
+        <version>1.0.0-SNAPSHOT</version>
     </dependency>
     
     <!-- OpenAPI Generator -->
@@ -87,9 +87,9 @@ O Summer é um framework inovador que automatiza a criação de APIs JAX-RS e pi
                 <release>17</release>
                 <annotationProcessorPaths>
                     <path>
-                        <groupId>com.example</groupId>
+                        <groupId>com.github.jimsp.summer</groupId>
                         <artifactId>summer-framework</artifactId>
-                        <version>1.0.0</version>
+                        <version>1.0.0-SNAPSHOT</version>
                     </path>
                 </annotationProcessorPaths>
             </configuration>
@@ -102,7 +102,7 @@ O Summer é um framework inovador que automatiza a criação de APIs JAX-RS e pi
 
 ```kotlin
 dependencies {
-    implementation("com.example:summer-framework:1.0.0")
+    implementation("com.github.jimsp.summer:summer-framework:1.0.0-SNAPSHOT")
     implementation("org.openapitools:openapi-generator:7.4.0")
     implementation("com.google.jimfs:jimfs:1.3.0")
     implementation("com.squareup:javapoet:1.13.0")
@@ -120,16 +120,16 @@ dependencies {
 
 ```
 src/main/java/
-├── com/example/annotations/
+├── com/github/jimsp/summer/annotations/
 │   ├── Summer.java                 # Anotação principal
 │   └── Channel.java               # Qualifier CDI para canais
-├── com/example/messaging/
+├── com/github/jimsp/summer/messaging/
 │   └── Channel.java               # Interface de mensageria
-├── com/example/retry/
+├── com/github/jimsp/summer/retry/
 │   ├── RetryPolicy.java           # Interface de retry
 │   ├── FixedBackoff.java          # Backoff fixo
 │   └── ExponentialBackoff.java    # Backoff exponencial
-└── com/example/processor/
+└── com/github/jimsp/summer/processor/
     └── OpenApiProcessor.java      # Annotation Processor
 ```
 
@@ -185,8 +185,8 @@ components:
 ### 2. Aplicando a Anotação @Summer
 
 ```java
-import com.example.annotations.Summer;
-import static com.example.annotations.Summer.Mode;
+import com.github.jimsp.summer.annotations.Summer;
+import static com.github.jimsp.summer.annotations.Summer.Mode;
 
 @Summer(
     value = "${PWD}/petstore.yaml",
@@ -207,9 +207,9 @@ public interface PetsApi {}
 
 Durante a compilação, o Summer automaticamente gera:
 
-- **DTOs**: `com.example.dto.Pet`
-- **API Interface**: `com.example.api.PetsApiService`
-- **Service Implementation**: `com.example.service.PetsApiServiceImpl`
+- **DTOs**: `com.github.jimsp.summer.dto.Pet`
+- **API Interface**: `com.github.jimsp.summer.api.PetsApiService`
+- **Service Implementation**: `com.github.jimsp.summer.service.PetsApiServiceImpl`
 - **Pipeline de Wrappers**: Retry → Circuit Breaker → Batch → DLQ
 
 ## ⚙️ Configuração Avançada
@@ -527,7 +527,7 @@ Ative logs detalhados:
 
 ```properties
 # application.properties
-logging.level.com.example.processor=DEBUG
+logging.level.com.github.jimsp.summer.processor=DEBUG
 logging.level.org.openapitools=DEBUG
 ```
 
