@@ -38,6 +38,8 @@ import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
 
+import jakarta.inject.Inject;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.io.Writer;
@@ -158,7 +160,7 @@ public class OpenApiProcessor extends AbstractProcessor {
                 .addStatement("return $T.ok(r).build()", ClassName.get("jakarta.ws.rs.core","Response")).build();
         } else {
             String chanName = "channel."+c.cluster()+"."+res+"."+m.getSimpleName();
-            ClassName concreteChannelImplClass = generateWrappers(dto, c, chanName, marker); // generateWrappers method is not yet defined
+            generateWrappers(dto, c, chanName, marker); // generateWrappers method is not yet defined
 
             // Parameterize the type for the channel field
             ParameterizedTypeName parameterizedChannelInterface = ParameterizedTypeName.get(
