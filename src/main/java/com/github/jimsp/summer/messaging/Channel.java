@@ -1,4 +1,4 @@
-package com.example.messaging;
+package com.github.jimsp.summer.messaging;
 
 import java.util.concurrent.CompletableFuture;
 

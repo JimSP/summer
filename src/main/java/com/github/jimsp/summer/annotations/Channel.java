@@ -1,4 +1,4 @@
-package com.example.annotations;
+package com.github.jimsp.summer.annotations;
 
 import jakarta.inject.Qualifier;
 import java.lang.annotation.*;

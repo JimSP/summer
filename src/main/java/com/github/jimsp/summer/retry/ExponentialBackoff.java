@@ -1,4 +1,4 @@
-package com.example.retry;
+package com.github.jimsp.summer.retry;
 
 import jakarta.enterprise.context.ApplicationScoped;
 

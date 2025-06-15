@@ -1,9 +1,9 @@
-package com.example.processor;
+package com.github.jimsp.summer.processor;
 
-import com.example.annotations.Channel;
-import com.example.annotations.Summer; // Changed from ContractFrom
-import com.example.annotations.Summer.Mode; // Changed from ContractFrom.Mode
-import com.example.messaging.Channel as MsgChannel;
+import com.github.jimsp.summer.annotations.Channel;
+import com.github.jimsp.summer.annotations.Summer; // Changed from ContractFrom
+import com.github.jimsp.summer.annotations.Summer.Mode; // Changed from ContractFrom.Mode
+import com.github.jimsp.summer.messaging.Channel as MsgChannel;
 import com.google.auto.service.AutoService;
 import com.google.common.jimfs.Configuration;
 import com.google.common.jimfs.Jimfs;
@@ -23,7 +23,7 @@ import java.util.*;
 import java.util.regex.*;
 import java.util.stream.*;
 
-@SupportedAnnotationTypes("com.example.annotations.Summer") // Changed
+@SupportedAnnotationTypes("com.github.jimsp.summer.annotations.Summer") // Changed
 @SupportedSourceVersion(SourceVersion.RELEASE_17)
 @AutoService(Processor.class)
 public class OpenApiProcessor extends AbstractProcessor {
@@ -65,9 +65,9 @@ public class OpenApiProcessor extends AbstractProcessor {
             .setGeneratorName("jaxrs-spec")
             .setInputSpec(Paths.get(spec).toUri().toString())
             .setOutputDir(out.toString())
-            .setModelPackage("com.example.dto")
-            .setApiPackage("com.example.api")
-            .setInvokerPackage("com.example.invoker")
+            .setModelPackage("com.github.jimsp.summer.dto")
+            .setApiPackage("com.github.jimsp.summer.api")
+            .setInvokerPackage("com.github.jimsp.summer.invoker")
             .setAdditionalProperties(Map.of(
                 "interfaceOnly",true,
                 "useBeanValidation",true,
@@ -97,8 +97,8 @@ public class OpenApiProcessor extends AbstractProcessor {
     private void patchServiceImpl(Element marker, ContractRaw c) throws IOException {
         String res = marker.getSimpleName().toString().replace("Api","").toLowerCase();
         String dtoName = capitalize(res);
-        ClassName dto = ClassName.get("com.example.dto", dtoName);
-        String ifaceFq = "com.example.api."+dtoName+"ApiService";
+        ClassName dto = ClassName.get("com.github.jimsp.summer.dto", dtoName);
+        String ifaceFq = "com.github.jimsp.summer.api."+dtoName+"ApiService";
         TypeElement ifaceEl = elems.getTypeElement(ifaceFq);
         if (ifaceEl == null) {
             log.printMessage(Diagnostic.Kind.ERROR, "Interface not found: " + ifaceFq, marker);
@@ -116,8 +116,8 @@ public class OpenApiProcessor extends AbstractProcessor {
         FieldSpec field;
         MethodSpec sendImpl;
 
-        if(c.mode()==com.example.annotations.Summer.Mode.SYNC){ // Changed
-            ClassName hType = ClassName.get("com.example.handlers", dtoName+"Handler");
+        if(c.mode()==com.github.jimsp.summer.annotations.Summer.Mode.SYNC){ // Changed
+            ClassName hType = ClassName.get("com.github.jimsp.summer.handlers", dtoName+"Handler");
             field = FieldSpec.builder(hType,"handler",Modifier.PRIVATE)
                 .addAnnotation(ClassName.get("jakarta.inject","Inject")).build();
             sendImpl = MethodSpec.overriding(m)
@@ -146,5 +146,5 @@ public class OpenApiProcessor extends AbstractProcessor {
             .addField(field)
             .addMethod(sendImpl)
             .build();
-        JavaFile.builder("com.example.service", impl).build().writeTo(filer);
+        JavaFile.builder("com.github.jimsp.summer.service", impl).build().writeTo(filer);
     }
