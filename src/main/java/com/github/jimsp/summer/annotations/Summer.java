@@ -3,47 +3,37 @@ package com.github.jimsp.summer.annotations;
 import java.lang.annotation.*;
 
 /**
- * Dispara a geração de DTOs + adaptadores JAX-RS a partir de um contrato OpenAPI.
- * Suporta placeholders ${ENV:default}.
+ * Marca uma interface *Api* para disparar geração de código.
+ *
+ *  – {@code basePackage} define a raiz; cada pacote pode sobrescrever.
+ *  – Campos vazios ⇒ herdam {@code basePackage}.
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.SOURCE)
-public @interface Summer { // Renamed from ContractFrom
-    /** Caminho ou URL do contrato YAML/JSON */
-    String value();
+public @interface Summer {
 
-    /** Namespace lógico que compõe o nome do canal */
-    String cluster() default "";
+    /* ---------- contrato ---------- */
+    String value();                // caminho/URL OpenAPI
+    String cluster()   default ""; // namespace lógico
 
-    /**
-     * SYNC → delega a Handler
-     * ASYNC → delega a Channel (+ wrappers retry/CB/batch/DLQ)
-     */
-    Mode mode() default Mode.SYNC;
+    enum Mode { SYNC, ASYNC }
+    Mode   mode()      default Mode.SYNC;
 
-    // ---------- Retry ----------
-    /** maxRetries() default 3; // ≤0 = ilimitado (apenas ASYNC) */
-    int maxRetries() default 3;
+    /* ---------- resiliency ---------- */
+    int  maxRetries()          default 3;
+    boolean circuitBreaker()   default false;
+    int  cbFailureThreshold()  default 5;
+    int  cbDelaySeconds()      default 30;
 
-    // ---------- Circuit Breaker (MicroProfile FT) ----------
-    /** circuitBreaker() default false; */
-    boolean circuitBreaker() default false;
-    /** cbFailureThreshold() default 5; */
-    int cbFailureThreshold() default 5;
-    /** cbDelaySeconds() default 30; */
-    int cbDelaySeconds() default 30;
+    String dlq()               default "";
+    int    batchSize()         default 1;
+    String batchInterval()     default "";
 
-    // ---------- Dead-Letter Queue ----------
-    /** dlq() default ""; // canal DLQ lógico; "" desativa */
-    String dlq() default "";
-
-    // ---------- Batch ----------
-    /** batchSize() default 1; // ≤1 desativa batch */
-    int batchSize() default 1;
-    /** batchInterval() default ""; // "" desativa; ex: "5s", "1000ms" */
-    String batchInterval() default "";
-
-    enum Mode {
-        SYNC, ASYNC
-    }
+    /* ---------- novos atributos (P1) ---------- */
+    String basePackage()        default "com.github.jimsp.summer";
+    String dtoPackage()         default "";   // vazio -> basePackage + ".dto"
+    String apiPackage()         default "";   // idem
+    String servicePackage()     default "";   // idem
+    String handlerPackage()     default "";   // idem
+    String channelPackage()     default "";   // idem
 }
