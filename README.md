@@ -815,13 +815,6 @@ Contribuições são bem-vindas! Por favor, leia nosso [CONTRIBUTING.md](CONTRIB
 
 Este projeto está licenciado sob a MIT License - veja o arquivo [LICENSE](LICENSE) para detalhes.
 
-## 🆘 Suporte
-
-- 📚 [Documentação Completa](https://summer-framework.dev)
-- 🐛 [Issues](https://github.com/jimsp/summer/issues)  
-- 💬 [Discussões](https://github.com/jimsp/summer/discussions)
-- 📧 [Email](mailto:support@summer-framework.dev)
-
 ---
 
 **Summer Framework** - Transformando especificações em microserviços resilientes ☀️
