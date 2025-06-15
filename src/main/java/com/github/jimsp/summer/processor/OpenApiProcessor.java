@@ -1,6 +1,6 @@
 package com.github.jimsp.summer.processor;
 
-import com.github.jimsp.summer.annotations.Channel;
+// import com.github.jimsp.summer.annotations.Channel; // This line will be removed by not including it here
 import com.github.jimsp.summer.annotations.Summer; // Changed from ContractFrom
 import com.github.jimsp.summer.annotations.Summer.Mode; // Changed from ContractFrom.Mode
 import com.github.jimsp.summer.messaging.Channel;
@@ -22,6 +22,7 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.regex.*;
 import java.util.stream.*;
+import java.util.concurrent.CompletableFuture;
 
 @SupportedAnnotationTypes("com.github.jimsp.summer.annotations.Summer") // Changed
 @SupportedSourceVersion(SourceVersion.RELEASE_17)
