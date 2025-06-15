@@ -1,497 +1,743 @@
-# Summer Framework
+# Summer Framework 🌞
 
-🌟 **Framework de geração automática de APIs e pipelines de mensageria baseado em contratos OpenAPI**
-
-O Summer é um framework inovador que automatiza a criação de APIs JAX-RS e pipelines de mensageria resilientes a partir de especificações OpenAPI. Com uma única anotação `@Summer`, você obtém DTOs, endpoints REST, retry policies, circuit breakers, batching e dead letter queues.
+**Summer** é um framework Java que automatiza a geração de microserviços resilientes a partir de especificações OpenAPI, implementando padrões enterprise como Retry, Circuit Breaker, Batching e Dead Letter Queue de forma declarativa.
 
 ## 🚀 Características Principais
 
-- **Geração Automática**: DTOs e endpoints JAX-RS gerados a partir de contratos OpenAPI
-- **Pipeline de Resiliência**: Retry automático com backoff configurável
-- **Circuit Breaker**: Proteção contra falhas em cascata usando MicroProfile Fault Tolerance
-- **Batching Inteligente**: Agrupamento de mensagens por tamanho ou tempo
-- **Dead Letter Queue**: Tratamento automático de mensagens com falha
-- **Placeholders**: Suporte a variáveis de ambiente e propriedades do sistema
-- **CDI Ready**: Integração nativa com Jakarta EE/MicroProfile
-
-## 📋 Requisitos
-
-- **JDK 17+**
-- **Maven 3.8+** ou **Gradle 7+**
-- **Jakarta EE 9+** ou **MicroProfile 5+**
+- ✅ **Geração Automática**: Transforma OpenAPI specs em implementações JAX-RS completas
+- ✅ **Padrões Resilientes**: Retry, Circuit Breaker, Batching, DLQ out-of-the-box  
+- ✅ **Multi-Framework**: Suporte para Spring Boot, Quarkus, Micronaut
+- ✅ **Multi-Messaging**: Kafka, RabbitMQ, Hazelcast, JMS
+- ✅ **Configuração Flexível**: Placeholders com fallbacks inteligentes
+- ✅ **Type Safety**: Geração type-safe com validação em tempo de compilação
 
 ## 📦 Instalação
 
 ### Maven
-
 ```xml
-<dependencies>
-    <!-- Summer Framework Core -->
-    <dependency>
-        <groupId>com.github.jimsp.summer</groupId>
-        <artifactId>summer-framework</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
-    </dependency>
-    
-    <!-- OpenAPI Generator -->
-    <dependency>
-        <groupId>org.openapitools</groupId>
-        <artifactId>openapi-generator</artifactId>
-        <version>7.4.0</version>
-    </dependency>
-    
-    <!-- Jimfs (File System in-memory) -->
-    <dependency>
-        <groupId>com.google.jimfs</groupId>
-        <artifactId>jimfs</artifactId>
-        <version>1.3.0</version>
-    </dependency>
-    
-    <!-- JavaPoet (Geração de código) -->
-    <dependency>
-        <groupId>com.squareup</groupId>
-        <artifactId>javapoet</artifactId>
-        <version>1.13.0</version>
-    </dependency>
-    
-    <!-- AutoService -->
-    <dependency>
-        <groupId>com.google.auto.service</groupId>
-        <artifactId>auto-service</artifactId>
-        <version>1.1.1</version>
-        <scope>provided</scope>
-    </dependency>
-    
-    <!-- MicroProfile Fault Tolerance (opcional) -->
-    <dependency>
-        <groupId>org.eclipse.microprofile.fault-tolerance</groupId>
-        <artifactId>microprofile-fault-tolerance-api</artifactId>
-        <version>4.0</version>
-    </dependency>
-    
-    <!-- MicroProfile Metrics (opcional) -->
-    <dependency>
-        <groupId>org.eclipse.microprofile.metrics</groupId>
-        <artifactId>microprofile-metrics-api</artifactId>
-        <version>5.0</version>
-    </dependency>
-</dependencies>
-
-<build>
-    <plugins>
-        <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-compiler-plugin</artifactId>
-            <version>3.11.0</version>
-            <configuration>
-                <release>17</release>
-                <annotationProcessorPaths>
-                    <path>
-                        <groupId>com.github.jimsp.summer</groupId>
-                        <artifactId>summer-framework</artifactId>
-                        <version>1.0.0-SNAPSHOT</version>
-                    </path>
-                </annotationProcessorPaths>
-            </configuration>
-        </plugin>
-    </plugins>
-</build>
+<dependency>
+    <groupId>com.github.jimsp</groupId>
+    <artifactId>summer-processor</artifactId>
+    <version>1.0.0</version>
+    <scope>provided</scope>
+</dependency>
+<dependency>
+    <groupId>com.github.jimsp</groupId>
+    <artifactId>summer-runtime</artifactId>
+    <version>1.0.0</version>
+</dependency>
 ```
 
 ### Gradle
-
 ```kotlin
 dependencies {
-    implementation("com.github.jimsp.summer:summer-framework:1.0.0-SNAPSHOT")
-    implementation("org.openapitools:openapi-generator:7.4.0")
-    implementation("com.google.jimfs:jimfs:1.3.0")
-    implementation("com.squareup:javapoet:1.13.0")
-    
-    compileOnly("com.google.auto.service:auto-service:1.1.1")
-    annotationProcessor("com.google.auto.service:auto-service:1.1.1")
-    
-    // Opcional: MicroProfile
-    implementation("org.eclipse.microprofile.fault-tolerance:microprofile-fault-tolerance-api:4.0")
-    implementation("org.eclipse.microprofile.metrics:microprofile-metrics-api:5.0")
+    annotationProcessor("com.github.jimsp:summer-processor:1.0.0")
+    implementation("com.github.jimsp:summer-runtime:1.0.0")
 }
 ```
 
-## 🏗️ Estrutura do Projeto
+## 🎯 Uso Básico
 
-```
-src/main/java/
-├── com/github/jimsp/summer/annotations/
-│   ├── Summer.java                 # Anotação principal
-│   └── Channel.java               # Qualifier CDI para canais
-├── com/github/jimsp/summer/messaging/
-│   └── Channel.java               # Interface de mensageria
-├── com/github/jimsp/summer/retry/
-│   ├── RetryPolicy.java           # Interface de retry
-│   ├── FixedBackoff.java          # Backoff fixo
-│   └── ExponentialBackoff.java    # Backoff exponencial
-└── com/github/jimsp/summer/processor/
-    └── OpenApiProcessor.java      # Annotation Processor
-```
+### 1. Defina sua especificação OpenAPI
 
-## 🌟 Uso Básico
-
-### 1. Definindo um Contrato
-
-Crie um arquivo OpenAPI (YAML ou JSON):
-
+**users-api.yaml**
 ```yaml
-# petstore.yaml
 openapi: 3.0.0
 info:
-  title: Pet Store API
+  title: Users API
   version: 1.0.0
 paths:
-  /pets:
+  /users:
     post:
-      operationId: createPet
+      operationId: createUser
       requestBody:
-        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Pet'
+              $ref: '#/components/schemas/User'
       responses:
         '201':
-          description: Pet created
+          description: User created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Pet'
+                $ref: '#/components/schemas/User'
 components:
   schemas:
-    Pet:
+    User:
       type: object
-      required:
-        - name
-        - type
       properties:
         id:
-          type: integer
-          format: int64
+          type: string
         name:
           type: string
-        type:
+        email:
           type: string
-          enum: [cat, dog, bird]
-        age:
-          type: integer
+      required: [name, email]
 ```
 
-### 2. Aplicando a Anotação @Summer
+### 2. Anote sua interface
 
 ```java
+package com.example.api;
+
 import com.github.jimsp.summer.annotations.Summer;
 import static com.github.jimsp.summer.annotations.Summer.Mode;
 
 @Summer(
-    value = "${PWD}/petstore.yaml",
-    cluster = "pets",
+    value = "users-api.yaml",
+    cluster = "users-service",
     mode = Mode.ASYNC,
-    maxRetries = 5,
-    circuitBreaker = true,
-    cbFailureThreshold = 3,
-    cbDelaySeconds = 30,
-    dlq = "channel.pets.dlq",
-    batchSize = 10,
-    batchInterval = "5s"
+    basePackage = "com.example"
 )
-public interface PetsApi {}
-```
-
-### 3. Compilação
-
-Durante a compilação, o Summer automaticamente gera:
-
-- **DTOs**: `com.github.jimsp.summer.dto.Pet`
-- **API Interface**: `com.github.jimsp.summer.api.PetsApiService`
-- **Service Implementation**: `com.github.jimsp.summer.service.PetsApiServiceImpl`
-- **Pipeline de Wrappers**: Retry → Circuit Breaker → Batch → DLQ
-
-## ⚙️ Configuração Avançada
-
-### Modos de Operação
-
-#### SYNC (Síncrono)
-```java
-@Summer(
-    value = "api-spec.yaml",
-    mode = Mode.SYNC
-)
-public interface OrdersApi {}
-```
-
-O modo síncrono delega para um Handler:
-```java
-@ApplicationScoped
-public class OrdersHandler {
-    public Order handle(Order order) {
-        // Processar pedido
-        return processedOrder;
-    }
+public interface UsersApiMarker {
+    // Interface marcadora - o processador gera tudo automaticamente
 }
 ```
 
-#### ASYNC (Assíncrono)
+### 3. Implemente o Handler (apenas para Mode.SYNC)
+
 ```java
-@Summer(
-    value = "api-spec.yaml",
-    mode = Mode.ASYNC,
-    maxRetries = 10,
-    circuitBreaker = true
-)
-public interface NotificationsApi {}
-```
+package com.example.handlers;
 
-O modo assíncrono cria um pipeline de mensageria com wrappers de resiliência.
+import com.example.dto.User;
+import jakarta.enterprise.context.ApplicationScoped;
 
-### Retry Policies
-
-#### Fixed Backoff (Padrão)
-```java
 @ApplicationScoped
-public class CustomFixedBackoff implements RetryPolicy {
-    @Override
-    public long nextDelay(int attempt) {
-        return 1000L; // 1 segundo entre tentativas
-    }
-}
-```
-
-#### Exponential Backoff
-```java
-@ApplicationScoped
-public class CustomExponentialBackoff implements RetryPolicy {
-    @Override
-    public long nextDelay(int attempt) {
-        return Math.min(200L * (1L << (attempt - 1)), 30_000L);
-    }
-}
-```
-
-### Circuit Breaker
-
-Baseado em MicroProfile Fault Tolerance:
-
-```java
-@Summer(
-    value = "api-spec.yaml",
-    circuitBreaker = true,
-    cbFailureThreshold = 5,    // Falhas antes de abrir
-    cbDelaySeconds = 60        // Tempo em estado aberto (segundos)
-)
-public interface ResilientApi {}
-```
-
-### Batching
-
-Agrupa mensagens por tamanho ou tempo:
-
-```java
-@Summer(
-    value = "api-spec.yaml",
-    batchSize = 100,           // Máximo de mensagens por batch
-    batchInterval = "10s"      // Flush a cada 10 segundos
-)
-public interface BatchedApi {}
-```
-
-### Dead Letter Queue
-
-Mensagens com falha são enviadas para um canal DLQ:
-
-```java
-@Summer(
-    value = "api-spec.yaml",
-    dlq = "channel.errors.failed-messages"
-)
-public interface ReliableApi {}
-```
-
-Você precisa implementar o canal DLQ:
-
-```java
-@Channel("channel.errors.failed-messages")
-@ApplicationScoped
-public class FailedMessagesChannel implements Channel<Object> {
-    private final Queue<Object> queue = new ConcurrentLinkedQueue<>();
+public class UserHandler {
     
-    @Override
-    public void send(Object message) {
-        queue.offer(message);
-        // Log, persist, ou processar mensagens com falha
+    public User handle(User user) {
+        // Sua lógica de negócio
+        user.setId(UUID.randomUUID().toString());
+        return userRepository.save(user);
     }
 }
 ```
 
-### Placeholders
+### 4. Configure o Messaging (apenas para Mode.ASYNC)
 
-Suporte a variáveis de ambiente e propriedades:
-
+**Spring Boot**
 ```java
-@Summer(
-    value = "${API_SPEC_PATH:/default/api.yaml}",
-    cluster = "${CLUSTER_NAME:default}",
-    dlq = "${DLQ_CHANNEL:channel.default.dlq}"
-)
-public interface ConfigurableApi {}
-```
-
-**Formato**: `${VARIAVEL:valor_padrao}`
-
-- Busca primeiro em System Properties
-- Depois em Environment Variables
-- Por último usa o valor padrão
-
-## 🔧 Implementação de Canais
-
-### Canal em Memória (Desenvolvimento)
-
-```java
-@Channel("channel.pets.create")
-@ApplicationScoped
-public class InMemoryPetChannel implements Channel<Pet> {
-    private final Queue<Pet> queue = new ConcurrentLinkedQueue<>();
-    
-    @Override
-    public void send(Pet pet) {
-        queue.offer(pet);
-        System.out.println("Pet queued: " + pet.getName());
-    }
-    
-    public List<Pet> drain() {
-        List<Pet> pets = new ArrayList<>();
-        Pet pet;
-        while ((pet = queue.poll()) != null) {
-            pets.add(pet);
-        }
-        return pets;
-    }
+@Bean
+@Channel("channel.users-service.users.createUser")
+public Channel<User, User> userChannel(KafkaTemplate<String, Object> kafka) {
+    return new KafkaChannel<>(kafka, "users-topic");
 }
 ```
 
-### Canal Kafka
-
+**Quarkus**
 ```java
-@Channel("channel.orders.process")
 @ApplicationScoped
-public class KafkaOrderChannel implements Channel<Order> {
+@Channel("channel.users-service.users.createUser")
+public class UserKafkaChannel implements Channel<User, User> {
     
     @Inject
-    private KafkaTemplate kafkaTemplate;
+    @RestClient
+    UserService userService;
+    
+    @Override
+    public void send(User user) {
+        // Implementação Kafka
+    }
+    
+    @Override
+    public User request(User user) {
+        return userService.createUser(user);
+    }
+}
+```
+
+## 📋 Referência Completa da Anotação @Summer
+
+| Atributo | Tipo | Padrão | Descrição |
+|----------|------|---------|-----------|
+| `value` | String | **obrigatório** | Caminho para o arquivo OpenAPI spec |
+| `cluster` | String | `"default"` | Nome do cluster para namespacing de canais |
+| `mode` | Mode | `ASYNC` | Modo de operação: `SYNC` ou `ASYNC` |
+| `basePackage` | String | **obrigatório** | Package base para geração de código |
+| `dtoPackage` | String | `{basePackage}.dto` | Package para DTOs gerados |
+| `apiPackage` | String | `{basePackage}.api` | Package para interfaces da API |
+| `servicePackage` | String | `{basePackage}.service` | Package para implementações de serviço |
+| `handlerPackage` | String | `{basePackage}.handlers` | Package para handlers (modo SYNC) |
+| `channelPackage` | String | `{basePackage}.channels.generated` | Package para wrappers de canal |
+| `replyChannel` | String | `""` | Canal personalizado para respostas |
+| `maxRetries` | int | `3` | Número máximo de tentativas |
+| `circuitBreaker` | boolean | `false` | Habilitar Circuit Breaker |
+| `cbFailureThreshold` | int | `5` | Threshold de falhas para CB |
+| `cbDelaySeconds` | int | `10` | Delay de abertura do CB (segundos) |
+| `batchSize` | int | `1` | Tamanho do batch (>1 habilita batching) |
+| `batchInterval` | String | `""` | Intervalo de flush do batch |
+| `dlq` | String | `""` | Nome da Dead Letter Queue |
+
+## 🔧 Configuração por Framework
+
+### Spring Boot
+
+**application.yml**
+```yaml
+summer:
+  messaging:
+    kafka:
+      bootstrap-servers: localhost:9092
+      producer:
+        key-serializer: org.apache.kafka.common.serialization.StringSerializer
+        value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    rabbitmq:
+      host: localhost
+      port: 5672
+      username: guest
+      password: guest
+```
+
+**Configuração**
+```java
+@Configuration
+@EnableSummer
+public class SummerConfig {
+    
+    @Bean
+    public SummerChannelFactory channelFactory() {
+        return SummerChannelFactory.builder()
+            .kafka(kafkaTemplate)
+            .rabbitmq(rabbitTemplate)
+            .build();
+    }
+}
+```
+
+### Quarkus
+
+**application.properties**
+```properties
+summer.messaging.kafka.bootstrap.servers=localhost:9092
+summer.messaging.rabbitmq.host=localhost
+summer.messaging.rabbitmq.port=5672
+
+# Configuração específica Quarkus
+mp.messaging.outgoing.users-topic.connector=smallrye-kafka
+mp.messaging.outgoing.users-topic.topic=users
+```
+
+**Producer**
+```java
+@ApplicationScoped
+public class SummerChannelProducer {
+    
+    @Produces
+    @Channel("channel.users-service.users.createUser")
+    public Channel<User, User> userChannel(@Channel("users-topic") Emitter<User> emitter) {
+        return new QuarkusKafkaChannel<>(emitter);
+    }
+}
+```
+
+### Micronaut
+
+**application.yml**
+```yaml
+micronaut:
+  application:
+    name: users-service
+kafka:
+  bootstrap:
+    servers: localhost:9092
+rabbitmq:
+  host: localhost
+  port: 5672
+```
+
+**Factory**
+```java
+@Factory
+public class ChannelFactory {
+    
+    @Bean
+    @Named("channel.users-service.users.createUser")
+    public Channel<User, User> userChannel(KafkaClient kafka) {
+        return new MicronautKafkaChannel<>(kafka, "users-topic");
+    }
+}
+```
+
+## 🔌 Integrações de Messaging
+
+### Kafka
+
+**Implementação Base**
+```java
+public class KafkaChannel<IN, OUT> implements Channel<IN, OUT> {
+    
+    private final KafkaTemplate<String, Object> kafka;
+    private final String topic;
+    private final String replyTopic;
+    
+    public KafkaChannel(KafkaTemplate<String, Object> kafka, String topic) {
+        this.kafka = kafka;
+        this.topic = topic;
+        this.replyTopic = topic + "-reply";
+    }
+    
+    @Override
+    public void send(IN message) {
+        kafka.send(topic, message);
+    }
+    
+    @Override
+    public CompletableFuture<Void> sendAsync(IN message) {
+        return kafka.send(topic, message).toCompletableFuture().thenApply(r -> null);
+    }
+    
+    @Override
+    public OUT request(IN message) {
+        String correlationId = UUID.randomUUID().toString();
+        kafka.send(topic, message, correlationId);
+        return waitForReply(correlationId);
+    }
+    
+    @Override
+    public CompletableFuture<OUT> requestAsync(IN message) {
+        return CompletableFuture.supplyAsync(() -> request(message));
+    }
+    
+    @SuppressWarnings("unchecked")
+    private OUT waitForReply(String correlationId) {
+        // Implementação com Consumer temporário ou cache de correlação
+        // ...
+    }
+}
+```
+
+**Spring Boot + Kafka**
+```java
+@Component
+public class UserKafkaChannelImpl extends KafkaChannel<User, User> {
+    
+    public UserKafkaChannelImpl(KafkaTemplate<String, Object> kafka) {
+        super(kafka, "users-topic");
+    }
+}
+```
+
+### RabbitMQ
+
+**Implementação Base**
+```java
+public class RabbitChannel<IN, OUT> implements Channel<IN, OUT> {
+    
+    private final RabbitTemplate rabbit;
+    private final String queue;
+    private final String replyQueue;
+    
+    public RabbitChannel(RabbitTemplate rabbit, String queue) {
+        this.rabbit = rabbit;
+        this.queue = queue;
+        this.replyQueue = queue + ".reply";
+    }
+    
+    @Override
+    public void send(IN message) {
+        rabbit.convertAndSend(queue, message);
+    }
+    
+    @Override
+    public OUT request(IN message) {
+        return (OUT) rabbit.convertSendAndReceive(queue, message);
+    }
+    
+    // Implementações async...
+}
+```
+
+### Hazelcast
+
+**Implementação**
+```java
+public class HazelcastChannel<IN, OUT> implements Channel<IN, OUT> {
+    
+    private final ITopic<IN> topic;
+    private final IMap<String, OUT> replyMap;
+    
+    public HazelcastChannel(HazelcastInstance hz, String topicName) {
+        this.topic = hz.getTopic(topicName);
+        this.replyMap = hz.getMap(topicName + "-replies");
+    }
+    
+    @Override
+    public void send(IN message) {
+        topic.publish(message);
+    }
+    
+    @Override
+    public OUT request(IN message) {
+        String correlationId = UUID.randomUUID().toString();
+        topic.publish(new CorrelatedMessage<>(correlationId, message));
+        
+        // Polling com timeout
+        return pollForReply(correlationId, Duration.ofSeconds(30));
+    }
+}
+```
+
+## 🔧 Power dos Placeholders
+
+O Summer suporta placeholders avançados com fallbacks em cadeia:
+
+### Sintaxe
+```
+${propriedade:valor_padrao}
+${ENV_VAR:${SYSTEM_PROP:valor_final}}
+```
+
+### Exemplos Práticos
+
+**Configuração Flexível**
+```java
+@Summer(
+    value = "${api.spec.path:src/main/resources/api.yaml}",
+    cluster = "${service.cluster:${HOSTNAME:default}}",
+    basePackage = "${app.package:com.example}",
+    maxRetries = "${retry.max:3}",
+    batchInterval = "${batch.interval:${BATCH_TIME:5s}}"
+)
+```
+
+**Por Ambiente**
+```bash
+# Development
+export API_SPEC_PATH="/dev/specs/users-api.yaml"
+export SERVICE_CLUSTER="dev-cluster"
+export RETRY_MAX="1"
+
+# Production  
+export API_SPEC_PATH="/prod/configs/users-api.yaml"
+export SERVICE_CLUSTER="prod-cluster"
+export RETRY_MAX="5"
+export BATCH_INTERVAL="10s"
+```
+
+**application.properties**
+```properties
+# Configuração por perfil
+api.spec.path=${API_SPEC_PATH:classpath:openapi/users.yaml}
+service.cluster=${CLUSTER_NAME:users-service}
+retry.max=${MAX_RETRIES:3}
+batch.interval=${BATCH_TIME:5s}
+
+# Configuração específica de ambiente
+summer.${spring.profiles.active}.cluster=prod-cluster
+```
+
+## 📚 Exemplos de Implementação Completa
+
+### Exemplo 1: E-commerce com Múltiplos Padrões
+
+```java
+@Summer(
+    value = "${ecommerce.api.spec:ecommerce-api.yaml}",
+    cluster = "${service.name:ecommerce}",
+    mode = Mode.ASYNC,
+    basePackage = "com.example.ecommerce",
+    
+    // Retry configuration
+    maxRetries = 5,
+    
+    // Circuit Breaker
+    circuitBreaker = true,
+    cbFailureThreshold = 10,
+    cbDelaySeconds = 30,
+    
+    // Batching
+    batchSize = 50,
+    batchInterval = "${batch.flush.interval:10s}",
+    
+    // Dead Letter Queue
+    dlq = "ecommerce.orders.dlq"
+)
+public interface EcommerceApiMarker {}
+```
+
+**Channel Implementation**
+```java
+@Component
+@Primary
+@Channel("channel.ecommerce.orders.createOrder")  
+public class OrderProcessingChannel implements Channel<Order, OrderResult> {
+    
+    @Autowired private KafkaTemplate<String, Object> kafka;
+    @Autowired private OrderService orderService;
+    @Autowired private PaymentService paymentService;
+    @Autowired private InventoryService inventoryService;
+    
+    @Override
+    @Transactional
+    public OrderResult request(Order order) {
+        try {
+            // 1. Validate inventory
+            inventoryService.reserve(order.getItems());
+            
+            // 2. Process payment  
+            PaymentResult payment = paymentService.charge(order.getPayment());
+            
+            // 3. Create order
+            Order savedOrder = orderService.create(order, payment);
+            
+            // 4. Send notifications
+            kafka.send("order-notifications", new OrderCreatedEvent(savedOrder));
+            
+            return new OrderResult(savedOrder.getId(), "SUCCESS");
+            
+        } catch (InventoryException e) {
+            return new OrderResult(null, "OUT_OF_STOCK");
+        } catch (PaymentException e) {
+            return new OrderResult(null, "PAYMENT_FAILED");
+        }
+    }
     
     @Override
     public void send(Order order) {
-        kafkaTemplate.send("orders-topic", order.getId().toString(), order);
+        // Fire-and-forget processing
+        CompletableFuture.runAsync(() -> request(order));
     }
 }
 ```
 
-### Canal JMS
+### Exemplo 2: Sistema de Notificações com Batching
 
 ```java
-@Channel("channel.notifications.send")
-@ApplicationScoped
-public class JmsNotificationChannel implements Channel<Notification> {
+@Summer(
+    value = "notifications-api.yaml",
+    cluster = "notifications",
+    mode = Mode.ASYNC,
+    basePackage = "com.example.notifications",
     
-    @Inject
-    @JMSConnectionFactory("java:/jms/DefaultConnectionFactory")
-    private JMSContext context;
+    // Aggressive batching for efficiency
+    batchSize = 100,
+    batchInterval = "30s",
     
+    // Retry with backoff
+    maxRetries = 3,
+    
+    // DLQ for failed notifications
+    dlq = "notifications.failed"
+)
+public interface NotificationsApiMarker {}
+```
+
+**Batch-Optimized Channel**
+```java
+@Service
+@Channel("channel.notifications.notifications.sendNotification")
+public class NotificationBatchChannel implements Channel<Notification, Void> {
+    
+    @Autowired private EmailService emailService;
+    @Autowired private SmsService smsService;
+    @Autowired private PushService pushService;
+    
+    // O framework já implementa batching, nós processamos o lote
     @Override
     public void send(Notification notification) {
-        context.createProducer()
-               .send(context.createQueue("notifications"), notification);
+        switch (notification.getType()) {
+            case EMAIL -> emailService.send(notification);
+            case SMS -> smsService.send(notification);  
+            case PUSH -> pushService.send(notification);
+        }
+    }
+    
+    // Implementação específica para lotes (opcional)
+    public void sendBatch(List<Notification> notifications) {
+        Map<NotificationType, List<Notification>> grouped = 
+            notifications.stream().collect(groupingBy(Notification::getType));
+            
+        grouped.forEach((type, batch) -> {
+            switch (type) {
+                case EMAIL -> emailService.sendBatch(batch);
+                case SMS -> smsService.sendBatch(batch);
+                case PUSH -> pushService.sendBatch(batch);
+            }
+        });
     }
 }
 ```
 
-## 📊 Monitoramento e Métricas
-
-### MicroProfile Metrics (Opcional)
-
-Se MicroProfile Metrics estiver no classpath, o Summer automaticamente adiciona métricas:
-
-- `summer_retry_attempts_total{channel, operation}` - Tentativas de retry
-- `summer_circuit_breaker_state{channel}` - Estado do circuit breaker
-- `summer_batch_size{channel}` - Tamanho dos batches processados
-- `summer_dlq_messages_total{channel}` - Mensagens enviadas para DLQ
-
-### Health Checks
+### Exemplo 3: Sistema de Audit com DLQ
 
 ```java
-@ApplicationScoped
-public class ChannelHealthCheck implements HealthCheck {
+@Summer(
+    value = "audit-api.yaml", 
+    cluster = "audit-service",
+    mode = Mode.ASYNC,
+    basePackage = "com.example.audit",
     
-    @Inject
-    @Channel("channel.pets.create")
-    private Channel<Pet> petChannel;
+    // Conservative retry for audit reliability  
+    maxRetries = 10,
+    
+    // Circuit breaker for external dependencies
+    circuitBreaker = true,
+    cbFailureThreshold = 3,
+    cbDelaySeconds = 60,
+    
+    // DLQ is critical for audit
+    dlq = "audit.critical.dlq",
+    replyChannel = "audit.responses"
+)
+public interface AuditApiMarker {}
+```
+
+**Reliable Audit Channel**
+```java
+@Service
+@Channel("channel.audit-service.audit.logEvent")
+public class AuditChannel implements Channel<AuditEvent, AuditResult> {
+    
+    @Autowired private AuditRepository repository;
+    @Autowired private ExternalAuditService externalService;
+    @Autowired private ComplianceService complianceService;
     
     @Override
-    public HealthCheckResponse call() {
+    @Retryable(maxAttempts = 3)
+    public AuditResult request(AuditEvent event) {
         try {
-            // Teste de conectividade
-            return HealthCheckResponse.up("pet-channel");
+            // 1. Local storage (always succeeds)
+            AuditRecord local = repository.save(toRecord(event));
+            
+            // 2. External compliance system (may fail)
+            if (event.isComplianceRequired()) {
+                ComplianceResult compliance = complianceService.submit(event);
+                local.setComplianceId(compliance.getId());
+                repository.save(local);
+            }
+            
+            // 3. External audit system (may fail) 
+            ExternalAuditResult external = externalService.log(event);
+            local.setExternalId(external.getId());
+            repository.save(local);
+            
+            return new AuditResult(local.getId(), external.getId(), "SUCCESS");
+            
         } catch (Exception e) {
-            return HealthCheckResponse.down("pet-channel");
+            log.error("Audit failed for event: " + event.getId(), e);
+            throw new AuditException("Failed to process audit event", e);
         }
     }
 }
 ```
 
-## 🧪 Testes
+## 🔄 Padrões de Channel Implementation
 
-### Testes Unitários
+### 1. Request-Reply Pattern
 
 ```java
-@ExtendWith(MockitoExtension.class)
-class PetServiceTest {
+@Service
+@Channel("channel.service.resource.operation")
+public class RequestReplyChannel implements Channel<Request, Response> {
     
-    @Mock
-    private Channel<Pet> petChannel;
+    @Override
+    public Response request(Request req) {
+        // Processamento síncrono
+        return processRequest(req);
+    }
     
-    @InjectMocks
-    private PetsApiServiceImpl petService;
-    
-    @Test
-    void shouldSendPetToChannel() {
-        Pet pet = new Pet().name("Fluffy").type("cat");
-        
-        Response response = petService.createPet(pet);
-        
-        assertEquals(202, response.getStatus());
-        verify(petChannel).send(pet);
+    @Override
+    public CompletableFuture<Response> requestAsync(Request req) {
+        return CompletableFuture.supplyAsync(() -> processRequest(req));
     }
 }
 ```
 
-### Testes de Integração
+### 2. Fire-and-Forget Pattern
 
 ```java
-@QuarkusTest
-class PetApiIntegrationTest {
+@Service  
+@Channel("channel.service.resource.operation")
+public class FireAndForgetChannel implements Channel<Command, Void> {
     
-    @Inject
-    @Channel("channel.pets.create")
-    private InMemoryPetChannel petChannel;
+    @Override
+    public void send(Command cmd) {
+        // Processamento assíncrono
+        processCommand(cmd);
+    }
+    
+    @Override
+    public CompletableFuture<Void> sendAsync(Command cmd) {
+        return CompletableFuture.runAsync(() -> processCommand(cmd));
+    }
+}
+```
+
+### 3. Event Sourcing Pattern
+
+```java
+@Service
+@Channel("channel.events.aggregate.command") 
+public class EventSourcingChannel implements Channel<Command, EventResult> {
+    
+    @Autowired private EventStore eventStore;
+    @Autowired private AggregateRepository aggregateRepo;
+    
+    @Override
+    public EventResult request(Command command) {
+        // 1. Load aggregate
+        Aggregate aggregate = aggregateRepo.findById(command.getAggregateId());
+        
+        // 2. Apply command
+        List<Event> events = aggregate.handle(command);
+        
+        // 3. Store events
+        eventStore.saveEvents(command.getAggregateId(), events);
+        
+        // 4. Update aggregate
+        events.forEach(aggregate::apply);
+        aggregateRepo.save(aggregate);
+        
+        return new EventResult(events);
+    }
+}
+```
+
+## 🧪 Testing
+
+### Unit Testing
+
+```java
+@ExtendWith(MockitoExtension.class)
+class UserServiceTest {
+    
+    @Mock private Channel<User, User> userChannel;
+    @InjectMocks private UserApiServiceImpl userService;
     
     @Test
-    void shouldProcessPetCreation() {
-        given()
-            .contentType(ContentType.JSON)
-            .body(new Pet().name("Rex").type("dog"))
-        .when()
-            .post("/pets")
-        .then()
-            .statusCode(202);
-            
-        List<Pet> queuedPets = petChannel.drain();
-        assertEquals(1, queuedPets.size());
-        assertEquals("Rex", queuedPets.get(0).getName());
+    void shouldCreateUser() {
+        // Given
+        User input = new User("John", "john@example.com");
+        User expected = new User("123", "John", "john@example.com");
+        when(userChannel.request(input)).thenReturn(expected);
+        
+        // When  
+        Response response = userService.createUser(input);
+        
+        // Then
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.getEntity()).isEqualTo(expected);
+    }
+}
+```
+
+### Integration Testing
+
+```java
+@SpringBootTest
+@TestPropertySource(properties = {
+    "summer.messaging.mock=true",
+    "summer.circuit-breaker.enabled=false"
+})
+class UserServiceIntegrationTest {
+    
+    @Autowired private UserApiServiceImpl userService;
+    @MockBean private UserRepository userRepository;
+    
+    @Test
+    void shouldHandleUserCreation() {
+        // Test com mocking do messaging layer
     }
 }
 ```
@@ -500,116 +746,82 @@ class PetApiIntegrationTest {
 
 ### Problemas Comuns
 
-#### 1. Canal CDI não encontrado
+**1. "Interface XXX não gerada"**
 ```
-Bean CDI faltando para canal "channel.pets.create"
-```
+Erro: Interface com.example.api.UserApiService não gerada
 
-**Solução**: Implemente o canal ou use o código sugerido no warning.
-
-#### 2. Dependência MicroProfile não encontrada
-```
-Circuit Breaker skipped - MicroProfile FT API not present
+Solução: Verificar se o arquivo OpenAPI é válido e acessível no classpath
 ```
 
-**Solução**: Adicione a dependência MicroProfile Fault Tolerance.
-
-#### 3. Erro de compilação do OpenAPI Generator
+**2. "Channel não encontrado"**  
 ```
-Processor error: Failed to generate from spec
+Erro: No qualifying bean of type 'Channel<User, User>' available
+
+Solução: Implementar ou configurar o Channel correspondente
 ```
 
-**Solução**: Verifique se o arquivo OpenAPI está válido e acessível.
+**3. "Circuit Breaker não funciona"**
+```
+Erro: MicroProfile Fault Tolerance não encontrado
 
-### Debug
+Solução: Adicionar dependência do MP Fault Tolerance
+```
 
-Ative logs detalhados:
+### Debug e Logging
 
 ```properties
-# application.properties
-logging.level.com.github.jimsp.summer.processor=DEBUG
-logging.level.org.openapitools=DEBUG
+# Habilitar logs detalhados
+logging.level.com.github.jimsp.summer=DEBUG
+logging.level.org.eclipse.microprofile.faulttolerance=DEBUG
+
+# Metrics para monitoring
+management.endpoints.web.exposure.include=health,metrics,circuitbreakers
+management.metrics.export.prometheus.enabled=true
 ```
 
-### Validação Manual
+## 📈 Performance e Monitoring
 
-Verifique se os arquivos foram gerados:
+### Métricas Automáticas
 
-```bash
-find target/generated-sources/annotations -name "*.java" | grep -E "(Dto|Api|Service)"
-```
+O Summer automaticamente expõe métricas para:
+- Contadores de retry
+- Status do Circuit Breaker  
+- Tamanhos de batch
+- Latência de mensagens
+- Taxa de erros do DLQ
 
-## 🚀 Exemplos Completos
-
-### E-commerce API
+### Configuração de Monitoring
 
 ```java
-@Summer(
-    value = "${API_SPECS_DIR}/ecommerce.yaml",
-    cluster = "ecommerce",
-    mode = Mode.ASYNC,
-    maxRetries = 3,
-    circuitBreaker = true,
-    cbFailureThreshold = 5,
-    cbDelaySeconds = 30,
-    batchSize = 20,
-    batchInterval = "2s",
-    dlq = "channel.ecommerce.failed"
-)
-public interface EcommerceApi {}
+@Configuration
+public class SummerMonitoringConfig {
+    
+    @Bean
+    public MeterRegistryCustomizer<MeterRegistry> summerMetrics() {
+        return registry -> registry.config()
+            .commonTags("service", "users-service")
+            .meterFilter(MeterFilter.deny(id -> id.getName().startsWith("jvm")));
+    }
+}
 ```
-
-### Microserviços com Different Clusters
-
-```java
-// Serviço de Pedidos
-@Summer(
-    value = "orders-api.yaml",
-    cluster = "orders",
-    mode = Mode.ASYNC,
-    maxRetries = 5,
-    dlq = "channel.orders.dlq"
-)
-public interface OrdersApi {}
-
-// Serviço de Pagamentos
-@Summer(
-    value = "payments-api.yaml",
-    cluster = "payments", 
-    mode = Mode.SYNC // Pagamento deve ser síncrono
-)
-public interface PaymentsApi {}
-
-// Serviço de Notificações
-@Summer(
-    value = "notifications-api.yaml",
-    cluster = "notifications",
-    mode = Mode.ASYNC,
-    batchSize = 50,
-    batchInterval = "10s"
-)
-public interface NotificationsApi {}
-```
-
-## 🤝 Contribuindo
-
-1. Fork o projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/amazing-feature`)
-3. Commit suas mudanças (`git commit -m 'Add amazing feature'`)
-4. Push para a branch (`git push origin feature/amazing-feature`)
-5. Abra um Pull Request
-
-## 📝 Licença
-
-Este projeto está licenciado sob a MIT License - veja o arquivo [LICENSE](LICENSE) para detalhes.
-
-## 🙏 Agradecimentos
-
-- [OpenAPI Generator](https://openapi-generator.tech/) - Geração de código a partir de especificações OpenAPI
-- [JavaPoet](https://github.com/square/javapoet) - API fluente para geração de código Java
-- [MicroProfile](https://microprofile.io/) - Especificações para microserviços Java
-- [Jimfs](https://github.com/google/jimfs) - Sistema de arquivos em memória para testes
 
 ---
 
-**Summer Framework** - Simplifique a criação de APIs resilientes e escaláveis! 🌞
+## 🤝 Contribuição
+
+Contribuições são bem-vindas! Por favor, leia nosso [CONTRIBUTING.md](CONTRIBUTING.md) antes de submeter PRs.
+
+## 📄 Licença
+
+Este projeto está licenciado sob a MIT License - veja o arquivo [LICENSE](LICENSE) para detalhes.
+
+## 🆘 Suporte
+
+- 📚 [Documentação Completa](https://summer-framework.dev)
+- 🐛 [Issues](https://github.com/jimsp/summer/issues)  
+- 💬 [Discussões](https://github.com/jimsp/summer/discussions)
+- 📧 [Email](mailto:support@summer-framework.dev)
+
+---
+
+**Summer Framework** - Transformando especificações em microserviços resilientes ☀️
