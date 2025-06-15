@@ -1,27 +1,59 @@
 package com.github.jimsp.summer.processor;
 
-// import com.github.jimsp.summer.annotations.Channel; // This line will be removed by not including it here
-import com.github.jimsp.summer.annotations.Summer; // Changed from ContractFrom
-import com.github.jimsp.summer.annotations.Summer.Mode; // Changed from ContractFrom.Mode
+// import com.github.jimsp.summer.annotations.Channel; // This line is removed
+import com.github.jimsp.summer.annotations.Summer;
+import static com.github.jimsp.summer.annotations.Summer.Mode;
 import com.github.jimsp.summer.messaging.Channel;
+
 import com.google.auto.service.AutoService;
 import com.google.common.jimfs.Configuration;
 import com.google.common.jimfs.Jimfs;
-import com.squareup.javapoet.*;
+import com.squareup.javapoet.AnnotationSpec;
+import com.squareup.javapoet.ClassName;
+import com.squareup.javapoet.FieldSpec;
+import com.squareup.javapoet.JavaFile;
+import com.squareup.javapoet.MethodSpec;
+import com.squareup.javapoet.ParameterizedTypeName;
+import com.squareup.javapoet.TypeSpec;
+
 import org.openapitools.codegen.DefaultGenerator;
 import org.openapitools.codegen.config.CodegenConfigurator;
-import javax.annotation.processing.*;
+
+import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.Filer;
+import javax.annotation.processing.Messager;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.annotation.processing.Processor;
+import javax.annotation.processing.RoundEnvironment;
+import javax.annotation.processing.SupportedAnnotationTypes;
+import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
-import javax.lang.model.element.*;
-import javax.lang.model.type.DeclaredType;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
+import javax.lang.model.element.TypeElement;
+// import javax.lang.model.type.DeclaredType; // Removed as unused
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
-import javax.tools.*;
-import java.io.*;
-import java.nio.file.*;
-import java.util.*;
-import java.util.regex.*;
-import java.util.stream.*;
+import javax.tools.Diagnostic;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.io.Writer;
+import java.nio.file.FileSystem;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
 import java.util.concurrent.CompletableFuture;
 
 @SupportedAnnotationTypes("com.github.jimsp.summer.annotations.Summer") // Changed
@@ -97,7 +129,7 @@ public class OpenApiProcessor extends AbstractProcessor {
 
     private void patchServiceImpl(Element marker, ContractRaw c) throws IOException {
         String res = marker.getSimpleName().toString().replace("Api","").toLowerCase();
-        String dtoName = capitalize(res); // capitalize method is not yet defined
+        String dtoName = toUpperCamel(res); // capitalize method is not yet defined
         ClassName dto = ClassName.get("com.github.jimsp.summer.dto", dtoName);
         String ifaceFq = "com.github.jimsp.summer.api."+dtoName+"ApiService";
         TypeElement ifaceEl = elems.getTypeElement(ifaceFq);
@@ -158,11 +190,13 @@ public class OpenApiProcessor extends AbstractProcessor {
     }
 
     // TODO: Define capitalize and generateWrappers methods
-    private String capitalize(String str) {
-        if (str == null || str.isEmpty()) {
-            return str;
-        }
-        return str.substring(0, 1).toUpperCase() + str.substring(1);
+    private String toUpperCamel(String s){
+      if (s == null || s.isEmpty()) return s; // Added null/empty check as a good practice
+      String[] parts=s.split("[\\-_]"); // Escaped hyphen for regex
+      return Arrays.stream(parts)
+            .filter(p->!p.isBlank())
+            .map(p->p.substring(0,1).toUpperCase()+p.substring(1).toLowerCase())
+            .collect(Collectors.joining());
     }
 
     private ClassName generateWrappers(ClassName dto, ContractRaw c, String chanName, Element marker) {
@@ -171,7 +205,7 @@ public class OpenApiProcessor extends AbstractProcessor {
         // This would typically generate several wrapper classes and return the outermost one.
         // For now, let's assume it generates a simple class in com.github.jimsp.summer.channels.generated
         String pkg = "com.github.jimsp.summer.channels.generated";
-        String simpleName = capitalize(chanName.replaceAll("[^a-zA-Z0-9]", "")) + "ChannelImpl";
+        String simpleName = toUpperCamel(chanName.replaceAll("[^a-zA-Z0-9]", "")) + "ChannelImpl";
 
         // Create a placeholder TypeSpec for the channel implementation
         TypeSpec channelImpl = TypeSpec.classBuilder(simpleName)
